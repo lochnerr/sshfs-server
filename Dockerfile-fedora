@@ -1,0 +1,41 @@
+ARG DISTRO=fedora
+ARG RELEASE=latest
+FROM $DISTRO:$RELEASE
+
+# Simple ssh file system server host (root and non-root container compatible).
+
+RUN dnf="microdnf" && if command -v dnf ; then dnf="dnf" ; fi && export $dnf && \
+
+    $dnf install -y attr crypto-policies-scripts dbus dbus-broker dbus-common dbus-libs fonts-filesystem iproute json-glib keyutils librhsm libseccomp libutempter procps-ng systemd-pam util-linux virt-what openssh-server && \
+    
+    # Create the host keys.
+
+    rm -f /etc/ssh/ssh_host_rsa* /etc/ssh/ssh_host_ecdsa* /etc/ssh/ssh_host_ed25519* && \
+    ssh-keygen -t rsa     -N '' -f /etc/ssh/ssh_host_rsa_key     -C ssh-host.example.com && \
+    ssh-keygen -t ed25519 -N '' -f /etc/ssh/ssh_host_ed25519_key -C ssh-host.example.com && \
+    ssh-keygen -t ecdsa   -N '' -f /etc/ssh/ssh_host_ecdsa_key   -C ssh-host.example.com && \
+
+    echo "Done!"
+
+# SSH Port
+EXPOSE 22
+
+# The persistent volume to be shared.
+VOLUME /share
+
+# Use systemd init to bring up services.
+CMD [ "/sbin/init" ]
+
+# Copy the restrictive ssh config.
+COPY 85-sshfs-only.conf /etc/ssh/sshd_config.d/
+
+# Set systemd stop signal.
+STOPSIGNAL SIGRTMIN+3
+
+# Set the build labels.
+# Do this last to allow build cacheing during development.
+ARG BUILD_DATE
+ARG VCS_REF
+LABEL org.label-schema.build-date = $BUILD_DATE \
+      org.label-schema.vcs-ref = $VCS_REF
+
